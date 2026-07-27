@@ -22,7 +22,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     grep -v -E "^torch" requirements.txt > reqs_no_torch.txt || true && \
     pip install --no-cache-dir -r reqs_no_torch.txt && \
     pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu || \
-    pip install --no-cache-dir torch==2.13.0 || true
+    pip install --no-cache-dir torch==2.13.0 || true && \
+    pip install --no-cache-dir "uvicorn[standard]"
 
 # Copy application code
 COPY . .
