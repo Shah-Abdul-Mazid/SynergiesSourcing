@@ -15,8 +15,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Upgrade pip and install Python dependencies
 COPY requirements.txt .
+# Install dependencies but avoid installing GPU-specific torch wheel directly from requirements.
+# We create a temporary requirements file that excludes any torch entries, install it,
+# then install a CPU-compatible torch wheel from PyTorch's CPU index.
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+    grep -v -E "^torch" requirements.txt > reqs_no_torch.txt || true && \
+    pip install --no-cache-dir -r reqs_no_torch.txt && \
+    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu || \
+    pip install --no-cache-dir torch==2.13.0 || true
 
 # Copy application code
 COPY . .
