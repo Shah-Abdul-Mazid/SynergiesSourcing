@@ -21,7 +21,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    # ultralytics pulls in full opencv-python as a transitive dep; remove it and keep only headless \
+    pip uninstall -y opencv-python || true && \
+    pip install --no-cache-dir --force-reinstall opencv-python-headless==4.10.0.84
 
 # Copy application code
 COPY . .
