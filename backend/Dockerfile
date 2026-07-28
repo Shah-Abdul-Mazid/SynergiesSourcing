@@ -6,24 +6,26 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Install minimal system-level build/runtime deps
+# Install minimal system-level build/runtime deps and OpenCV dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     gcc \
     ca-certificates \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip and install Python dependencies
 COPY requirements.txt .
-# Install dependencies but avoid installing GPU-specific torch wheel directly from requirements.
-# We create a temporary requirements file that excludes any torch entries, install it,
-# then install a CPU-compatible torch wheel from PyTorch's CPU index.
+# Filter requirements.txt to remove torch and nvidia packages, then install them.
+# We manually install CPU versions of torch and torchvision, plus uvicorn and fastapi.
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    grep -v -E "^torch" requirements.txt > reqs_no_torch.txt || true && \
+    python -c "import re; p = open('requirements.txt'); lines = [l for l in p if not re.match(r'^(torch|nvidia)', l.lower())]; open('reqs_no_torch.txt', 'w').writelines(lines)" && \
     pip install --no-cache-dir -r reqs_no_torch.txt && \
-    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu || \
-    pip install --no-cache-dir torch==2.13.0 || true && \
-    pip install --no-cache-dir "uvicorn[standard]"
+    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu torchvision==0.28.0+cpu && \
+    pip install --no-cache-dir "uvicorn[standard]" fastapi
 
 # Copy application code
 COPY . .

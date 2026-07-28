@@ -15,7 +15,9 @@ import logging
 router = APIRouter(prefix="/qc", tags=["quality_control"])
 logger = logging.getLogger("smartfactory.qc")
 
-best_model = r"C:\Users\LENOVO\Desktop\SynergiesSourcing\backend\Data\runs\fabric_yolo\weights\best.pt"
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+best_model = str(BASE_DIR / "Data" / "runs" / "fabric_yolo" / "weights" / "best.pt")
 
 try:
     yolo_model = YOLO(best_model)
