@@ -19,13 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Upgrade pip and install Python dependencies
 COPY requirements.txt .
-# Filter requirements.txt to remove torch and nvidia packages, then install them.
-# We manually install CPU versions of torch and torchvision, plus uvicorn and fastapi.
+
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    python -c "import re; p = open('requirements.txt'); lines = [l for l in p if not re.match(r'^(torch|nvidia)', l.lower())]; open('reqs_no_torch.txt', 'w').writelines(lines)" && \
-    pip install --no-cache-dir -r reqs_no_torch.txt && \
-    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu torchvision==0.28.0+cpu && \
-    pip install --no-cache-dir "uvicorn[standard]" fastapi
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
@@ -34,4 +30,4 @@ COPY . .
 EXPOSE 8080
 
 # Use sh -c so ${PORT} will be expanded at runtime by the shell
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
