@@ -14,7 +14,8 @@ import AIAssistantTab from './components/AIAssistantTab';
 import RAGTab from './components/RAGTab';
 
 // Configure Axios defaults to target our FastAPI backend
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').trim().replace(/\/+$/, '');
+const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 axios.defaults.baseURL = API_URL;
 
 export default function App() {
@@ -42,7 +43,7 @@ export default function App() {
       setQcLogs(qcLogsRes.data);
     } catch (err) {
       console.error("Failed to sync state with ERP database:", err);
-      setSyncError("ERP Connection Offline. Verify that the FastAPI backend is running on localhost:8000.");
+      setSyncError(`ERP Connection Offline. Unable to reach backend at ${API_URL}`);
     } finally {
       setIsSyncing(false);
     }
