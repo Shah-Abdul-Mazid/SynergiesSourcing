@@ -19,11 +19,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Set up open CORS permissions for developer workstation environments
+# Set up CORS permissions to allow all origins safely
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

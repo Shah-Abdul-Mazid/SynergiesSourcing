@@ -1,5 +1,7 @@
 /.venv
 /.env
 apparel_erp.db
+# Ignore large training data — NOT the trained weights in models/
 Data
+# models/ is intentionally tracked (contains best.pt deployed to Render)
 

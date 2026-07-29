@@ -16,27 +16,88 @@ router = APIRouter(prefix="/qc", tags=["quality_control"])
 logger = logging.getLogger("smartfactory.qc")
 ai_service = AIService()
 
+import os
 from pathlib import Path
+
+# BASE_DIR resolves to /app inside the Docker container (Render)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+
+# Cache directory for downloaded models (persists inside container lifetime)
+MODEL_CACHE_DIR = BASE_DIR / "models"
+MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
 yolo_model = None
 
-try:
-    local_weights_1 = BASE_DIR / "Data" / "runs" / "fabric_yolo" / "weights" / "best.pt"
-    local_weights_2 = BASE_DIR / "yolov8n.pt"
-    local_weights_3 = BASE_DIR / "yolo12n.pt"
 
-    if local_weights_1.exists():
-        yolo_model = YOLO(str(local_weights_1))
-        logger.info(f"Loaded custom YOLO model from {local_weights_1}")
-    elif local_weights_2.exists():
-        yolo_model = YOLO(str(local_weights_2))
-        logger.info(f"Loaded YOLO model from {local_weights_2}")
-    elif local_weights_3.exists():
-        yolo_model = YOLO(str(local_weights_3))
-        logger.info(f"Loaded YOLO model from {local_weights_3}")
+def _download_from_huggingface(repo_id: str, filename: str) -> str | None:
+    """
+    Download a model file from Hugging Face Hub into models/ cache.
+    Requires: pip install huggingface_hub
+    Set env vars:
+        HF_MODEL_REPO   = "your-username/fabric-defect-yolo"
+        HF_MODEL_FILE   = "best.pt"
+        HF_TOKEN        = "hf_xxxx"  (only needed for private repos)
+    """
+    try:
+        from huggingface_hub import hf_hub_download
+        hf_token = os.environ.get("HF_TOKEN", None)  # None = public repo
+        cached_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            local_dir=str(MODEL_CACHE_DIR),
+            token=hf_token,
+        )
+        logger.info(f"Downloaded model from HuggingFace '{repo_id}/{filename}' → {cached_path}")
+        return cached_path
+    except Exception as e:
+        logger.warning(f"Hugging Face download failed ({e}). Trying local fallback.")
+        return None
+
+
+try:
+    # ── Priority 1: Hugging Face Hub (for models > 100MB) ──────────────────────
+    # Set HF_MODEL_REPO and HF_MODEL_FILE in Render environment variables
+    hf_repo   = os.environ.get("HF_MODEL_REPO", "")   # e.g. "yourname/fabric-yolo"
+    hf_file   = os.environ.get("HF_MODEL_FILE", "best.pt")
+    hf_cached = MODEL_CACHE_DIR / hf_file              # local cached copy
+
+    # ── Priority 2: YOLO_MODEL_PATH env var (absolute path override) ───────────
+    env_path = os.environ.get("YOLO_MODEL_PATH", "")
+
+    # ── Priority 3: models/best.pt committed to Git (for models ≤ 100MB) ──────
+    committed_model = BASE_DIR / "models" / "best.pt"
+
+    # ── Priority 4: Legacy Data/runs path (local dev only) ─────────────────────
+    legacy_model = BASE_DIR / "Data" / "runs" / "fabric_yolo" / "weights" / "best.pt"
+
+    model_path = None
+
+    if hf_repo:
+        if hf_cached.exists():
+            # Already downloaded in a previous startup (same container lifetime)
+            model_path = str(hf_cached)
+            logger.info(f"Using cached HuggingFace model: {hf_cached}")
+        else:
+            model_path = _download_from_huggingface(hf_repo, hf_file)
+
+    if not model_path and env_path and Path(env_path).exists():
+        model_path = env_path
+        logger.info(f"Loaded YOLO model from YOLO_MODEL_PATH env: {env_path}")
+
+    if not model_path and committed_model.exists():
+        model_path = str(committed_model)
+        logger.info(f"Loaded committed YOLO model from {committed_model}")
+
+    if not model_path and legacy_model.exists():
+        model_path = str(legacy_model)
+        logger.info(f"Loaded legacy YOLO model from {legacy_model}")
+
+    if model_path:
+        yolo_model = YOLO(model_path)
     else:
         yolo_model = YOLO("yolov8n.pt")
-        logger.info("YOLOv8n standard weights loaded.")
+        logger.info("No custom weights found — using default YOLOv8n weights.")
+
 except Exception as e:
     logger.warning(
         f"YOLO model load warning ({e}). "
