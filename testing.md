@@ -1,7 +1,7 @@
-# 🏭 SmartFactory AI-ERP: Interview Demonstration & Testing Protocol
-This document serves as your **live demonstration script and testing protocol** when showing **SmartFactory AI-ERP** to the interview board at **Synergies Sourcing Bangladesh Ltd.** 
+# 🏭 SmartFactory AI-ERP & Multimodal Vision Inspector: Interview Demonstration & Testing Protocol
+This document serves as your **live demonstration script and testing protocol** when showing **SmartFactory AI-ERP & Multimodal Vision Inspector** to technical interview boards and engineering leads. 
 
-It provides step-by-step instructions to test and verify every module, copy-paste sample inputs, check backend REST APIs, and explain the direct business impact to merchandisers and directors.
+It provides step-by-step instructions to test and verify every module, copy-paste sample inputs, check backend REST APIs, and explain the direct business impact of combining Computer Vision (YOLOv8/OpenCV) and Generative AI (Multimodal Vision LLM).
 
 ---
 
@@ -322,10 +322,10 @@ Upload buyer compliance guidelines or operations manuals and query them locally 
     1. Navigate to **Knowledge Base (RAG)** on the sidebar.
     2. Create a dummy text file named `compliance_rules.txt` containing the following text:
         ```text
-        SYNERGIES COMPLIANCE RULES:
+        GLOBAL APPAREL COMPLIANCE RULES:
         1. All shipments to H&M Group must arrive at London Port within 25 days of PO approval.
         2. Fabric inspection must adhere to the 4-Point System (ASTM D5430).
-        3. Payment terms for Textile Synergy Ltd are strictly 30% advance deposit and 70% letter of credit (L/C) at sight.
+        3. Payment terms for Apex Mills Ltd are strictly 30% advance deposit and 70% letter of credit (L/C) at sight.
         ```
     3. Click **Choose contract, invoice, or tech pack**, select `compliance_rules.txt`, and click **⚡ Index into Knowledge Base**.
     4. Wait for indexing to complete, then check that `compliance_rules.txt` is listed in the **Indexed Documents Library**.

@@ -1,6 +1,6 @@
-# 🚀 Synergies Sourcing Interview Preparation Guide: Abdul Mazid
+# 🚀 Enterprise Technical Interview Preparation Guide: Multimodal Vision-LLM & AI-ERP
 
-This guide outlines your preparation strategy, key talking points, and slides/walkthrough structure for your upcoming interview at **Synergies Sourcing Bangladesh Ltd.** It highlights **SmartFactory AI-ERP** (the software you developed) and showcases how AI can be leveraged to dramatically improve human efficiency in a garments buying house.
+This guide outlines your preparation strategy, key talking points, and slides/walkthrough structure for technical interviews. It highlights **SmartFactory AI-ERP & Multimodal Vision Inspector** (the software you developed) and showcases how classic Computer Vision (YOLOv8, OpenCV) combined with Generative AI (Vision-Language Models / LLMs) bridges traditional detection and intelligent multimodal reasoning.
 
 ---
 
@@ -54,7 +54,7 @@ graph TD
 
 ## 💡 Part 2: AI Presentation — Improving Sourcing Efficiency
 
-Use these key pillars to explain how emerging AI technologies can improve human operational efficiency specifically for Synergies Sourcing:
+Use these key pillars to explain how emerging AI technologies can improve human operational efficiency:
 
 | Sourcing Operation | Traditional Human Workflow | AI-Enabled Efficiency | Human Efficiency Gains |
 | :--- | :--- | :--- | :--- |
@@ -80,7 +80,7 @@ Be ready to deep-dive into the engineering choices you made when developing **Sm
 
 ### 3. "How did you ensure the LLM outputs stable JSON when interacting with the database?"
 * **Answer**: "This is a classic problem in Generative AI systems. I resolved it in two ways:
-  1. **Strict Prompt Constraint**: In [ai_service.py](file:///c:/Users/LENOVO/Desktop/Software%2520Engineer%2520Synergies%2520Sourcing%2520Bangladesh%2520Ltd/backend/app/services/ai_service.py), the prompt explicitly defines the target JSON schema and instructs the LLM to output only raw JSON without markdown fences.
+  1. **Strict Prompt Constraint**: In `ai_service.py`, the prompt explicitly defines the target JSON schema and instructs the LLM to output only raw JSON without markdown fences.
   2. **Defensive Parsing & Sanitization**: The backend extracts the output, uses regular expressions to strip any code block fences (e.g. ````json ... ````), parses it defensively within a `try-except` block, and validates required keys. If the parse fails, the service falls back to safe mock values to prevent a 500 error."
 
 ### 4. "How did you handle the async database operations?"
@@ -90,7 +90,13 @@ Be ready to deep-dive into the engineering choices you made when developing **Sm
 * **Answer**: "Degrees (BSc/MSc) give our team members **high-level critical thinking, styling expertise, and negotiation skills**. However, a degree does not protect them from manual, repetitive administrative friction and biological fatigue:
   1. **Leveraging Expertise over Data Entry**: An MSc-educated merchandiser knows textile science, but they still have to spend 1-2 hours manually copying and typing a 50-item BOM from a PDF Tech Pack into a database. AI parses it in 5 seconds. This frees up the highly qualified merchandiser to focus on what their degree actually prepared them for: finding better fabrics, negotiating prices, and building buyer relationships.
   2. **Solving Mental/Physical Fatigue in QC**: A QA inspector with a Textile degree knows what fabric defects look like, but visually scanning thousands of meters of fabric moving at high speeds is exhausting. After 4-6 hours, human focus drops, and defects slip through. The OpenCV + YOLO12 AI vision engine monitors the feed with 100% consistent attention 24/7. It alerts the inspector to specific coordinates, acting as an 'AI co-pilot' to eliminate error.
-  3. **Cognitive Scale (Proactive vs. Reactive)**: Knowing shipping logistics doesn't give a human the ability to monitor real-time port logs, weather datasets, and carrier performance variables simultaneously. The AI processes these metrics in real-time, predicting logistics risks before cargo leaves the port, allowing our team to act proactively rather than reacting after cargo is delayed."
+  3. **Cognitive Scale (Proactive vs. Reactive)**: Knowing shipping logistics doesn't give a human the ability to monitor real-time port logs, weather datasets, and carrier performance variables simultaneously. The AI processes these metrics in real-time, predicting logistics risks before cargo leaves the port, allowing our team to act proactively rather than reacting after cargo is delayed.
+
+### 6. "Can you explain your Multimodal Vision-LLM Assistant (CV + GenAI) architecture?"
+* **Answer**: "Yes! This architecture bridges classic Computer Vision with modern Generative AI:
+  1. **Spatial Object Detection & Cropping (YOLOv8 + OpenCV)**: The classical/deep learning engine first scans the full image or document frame to locate bounding boxes `[x1, y1, x2, y2]` of interest (e.g. equipment damage, document elements, or textile defects). It crops these specific region patches using OpenCV (`img[y1:y2, x1:x2]`) and encodes them as base64 byte streams.
+  2. **Multimodal Reasoning (Vision-Language Models)**: The cropped region patches are fed alongside structured prompt metadata into a Vision-Language Model (such as **Qwen2-VL**, **LLaVA**, or **Gemini Vision**).
+  3. **Diagnostic Synthesis**: Rather than giving simple label strings like 'defect', the Vision-LLM evaluates spatial anomalies, visual textures, and contextual intent to synthesize a full diagnostic report detailing visual signatures, root cause hypotheses, severity scores, and corrective remediation steps.""
 
 ---
 
@@ -196,15 +202,15 @@ To make your presentation highly engaging, walk the board through this realistic
 
 ### 👤 Part A: If You Are the Client (The Buyer - e.g., Zara Sourcing Manager)
 
-**What you do:** You design a new apparel collection and send an order request to Synergies Sourcing.
+**What you do:** You design a new apparel collection and send an order request to the sourcing team.
 **What you provide (The Input):** You send a **Tech Pack** email. It is often unstructured, written in plain text, or sent as a PDF attachment.
 
 *   **Example Client Tech Pack email content:**
-    > *"Hi Synergies team, we want to place an order for 2,000 units of our new 'Mens Slim Fit Jeans' (Order ID: PO-9988). The contact person is procurement@zara.com. For each pair of jeans, we require 1.5 meters of blue denim fabric, 1 metal zipper, and 5 brass rivets/buttons. Please send us a quote for this order as soon as possible."*
+    > *"Hi Sourcing team, we want to place an order for 2,000 units of our new 'Mens Slim Fit Jeans' (Order ID: PO-9988). The contact person is procurement@zara.com. For each pair of jeans, we require 1.5 meters of blue denim fabric, 1 metal zipper, and 5 brass rivets/buttons. Please send us a quote for this order as soon as possible."*
 
 ---
 
-### 👤 Part B: If You Are the Merchandiser (At Synergies Sourcing)
+### 👤 Part B: If You Are the Merchandiser / Quality Manager
 
 **What you do:** You receive the client's email. Instead of spending 1 hour manually calculating material requirements and typing them into spreadsheet databases, you use the AI-ERP platform.
 

@@ -89,8 +89,13 @@ export default function QCTab({
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-bold text-slate-100">Quality Control Vision Workbench</h2>
-          <p className="text-xs text-slate-400 font-normal">Analyze textile samples. Run YOLO12 + OpenCV multi-pass defect scanners, compile telemetry logs, and generate visual AI compliance reports.</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-slate-100">Multimodal Vision-LLM Inspector (CV + GenAI)</h2>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              YOLOv8 Crop + Vision LLM
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 font-normal">Detect objects & surface defects using YOLOv8 + OpenCV multi-pass vision engines, auto-crop region patches, and synthesize multimodal Vision-LLM diagnostic summaries.</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -101,7 +106,7 @@ export default function QCTab({
                 : 'bg-slate-800 hover:bg-slate-750 text-slate-350 border-slate-750'
             }`}
           >
-            📂 Workbench
+            📂 Visual Inspector
           </button>
           <button
             onClick={() => setActiveSubTab('history')}
@@ -111,7 +116,7 @@ export default function QCTab({
                 : 'bg-slate-800 hover:bg-slate-750 text-slate-350 border-slate-750'
             }`}
           >
-            📜 Logs Ledger
+            📜 Audit Ledger
           </button>
           <button
             onClick={() => setActiveSubTab('analytics')}
@@ -131,11 +136,11 @@ export default function QCTab({
           {/* Left panel: Image Uploader and Controls */}
           <div className="lg:col-span-5 space-y-4">
             <div className="p-5 rounded-2xl glass-panel space-y-4">
-              <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Fabric Image Feed</h3>
+              <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Image / Document Inspection Feed</h3>
               
               {/* Select PO */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Target Production Order</label>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Target Production Order / Asset</label>
                 <select
                   value={selectedOrderId}
                   onChange={handleSelectOrder}
@@ -152,7 +157,7 @@ export default function QCTab({
 
               {/* Upload Drop Zone */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Upload Inspection Frame</label>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Upload Frame / Document / Scene Image</label>
                 <div className="relative border-2 border-dashed border-slate-800 rounded-2xl hover:border-indigo-500/50 transition-colors p-6 bg-slate-950/40 flex flex-col items-center justify-center text-center space-y-2">
                   <input
                     type="file"
@@ -163,14 +168,14 @@ export default function QCTab({
                   {previewUrl ? (
                     <img 
                       src={previewUrl} 
-                      alt="Fabric Upload Preview" 
+                      alt="Inspection Upload Preview" 
                       className="max-h-48 object-contain rounded-xl"
                     />
                   ) : (
                     <>
                       <span className="text-3xl">📷</span>
-                      <p className="text-xs font-semibold text-slate-350">Click or drag fabric frame here</p>
-                      <p className="text-[10px] text-slate-500">Supports JPEG, PNG — YOLO12 + CV texture analysis</p>
+                      <p className="text-xs font-semibold text-slate-350">Click or drag scene image frame here</p>
+                      <p className="text-[10px] text-slate-500">Supports JPEG, PNG — YOLOv8 Object Detection + OpenCV Crop + Vision LLM</p>
                     </>
                   )}
                 </div>
@@ -190,29 +195,29 @@ export default function QCTab({
                 {isLoading ? (
                   <>
                     <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                    Running Neural Network Scan...
+                    Running Multimodal Vision-LLM Pipeline...
                   </>
                 ) : (
-                  <>🔍 Run CV Defect Scanner</>
+                  <>🔍 Run Multimodal Crop & Vision Diagnostic</>
                 )}
               </button>
             </div>
           </div>
 
-          {/* Right panel: YOLO Output Image and AI Report */}
+          {/* Right panel: YOLO Output Image, Cropped Region Thumbnails, and AI Vision Report */}
           <div className="lg:col-span-7">
             {!result ? (
               <div className="p-12 rounded-2xl glass-panel border-dashed border-slate-850 flex flex-col items-center justify-center text-center space-y-3 h-[480px]">
                 <span className="text-4xl text-slate-600">🔍</span>
-                <h3 className="font-bold text-slate-300 text-sm">Vision Scanner Awaiting Stream</h3>
-                <p className="text-xs text-slate-500 max-w-sm">Attach a photo of the fabric roll surface, bind it to an active order ID, and trigger the CV scanner to view the annotated defect boxes.</p>
+                <h3 className="font-bold text-slate-300 text-sm">Multimodal Vision Assistant Awaiting Input</h3>
+                <p className="text-xs text-slate-500 max-w-sm">Attach a sample image, select an order ID, and trigger the Multimodal Visual Inspector to view detected bounding boxes, cropped region patches, and LLM diagnostic reports.</p>
               </div>
             ) : (
               <div className="p-6 rounded-2xl glass-panel space-y-6 min-h-[480px] flex flex-col justify-between">
                 {/* Header Verdict */}
                 <div className="flex justify-between items-center border-b border-slate-800 pb-4">
                   <div>
-                    <h3 className="font-bold text-slate-200 text-sm capitalize">Computer Vision Verdict</h3>
+                    <h3 className="font-bold text-slate-200 text-sm capitalize">Multimodal Vision-LLM Verdict</h3>
                     <span className="text-[10px] text-slate-450 font-bold block">LOG ID COMPILING UNDER PO: {result.order_id}</span>
                   </div>
                   <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase border ${
@@ -224,25 +229,26 @@ export default function QCTab({
                   </span>
                 </div>
 
-                {/* Annotated Frame Display & Telemetry logs */}
+                {/* Annotated Frame Display & Bounding Box Telemetry */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Annotated Image */}
-                  <div className="bg-slate-950 rounded-xl border border-slate-850 p-2 flex items-center justify-center">
+                  <div className="bg-slate-950 rounded-xl border border-slate-850 p-2 flex flex-col items-center justify-center">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-1 block w-full text-left">Annotated Scene Frame</span>
                     <img 
                       src={result.annotated_image} 
                       alt="YOLOv8 CV Annotation Feed" 
-                      className="max-h-48 object-contain rounded-lg"
+                      className="max-h-44 object-contain rounded-lg"
                     />
                   </div>
 
                   {/* Telemetry log list */}
                   <div className="bg-slate-950 border border-slate-850 rounded-xl p-4 flex flex-col justify-between">
                     <div>
-                      <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-2 block">YOLO12 + CV Defect Telemetry</span>
+                      <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-2 block">YOLOv8 + OpenCV Spatial Telemetry</span>
                       {result.yolo_detections?.length === 0 ? (
-                        <p className="text-xs text-emerald-400 font-medium">✓ No defect anomalies detected by YOLO12 + CV scanner.</p>
+                        <p className="text-xs text-emerald-400 font-medium">✓ No anomalies detected by spatial scanner.</p>
                       ) : (
-                        <div className="space-y-1.5 overflow-y-auto max-h-[120px]">
+                        <div className="space-y-1.5 overflow-y-auto max-h-[110px]">
                           {result.yolo_detections?.map((det, index) => {
                             const isDefectFree = det.class === 'defect_free';
                             const isCritical = !isDefectFree && det.confidence >= 0.60;
@@ -253,7 +259,7 @@ export default function QCTab({
                             return (
                               <div key={index} className="flex flex-col text-[10px] border-b border-slate-900 pb-1 text-slate-400">
                                 <div className="flex justify-between items-center text-xs">
-                                  <span className={`capitalize font-bold ${labelColor}`}>{icon} {det.class.replace(/_/g, ' ')}</span>
+                                  <span className={`capitalize font-bold ${labelColor}`}>{icon} Region #{index + 1}: {det.class.replace(/_/g, ' ')}</span>
                                   <span className={`font-mono font-bold ${confColor}`}>{(det.confidence * 100).toFixed(1)}%</span>
                                 </div>
                                 <span className="font-mono text-[9px] text-slate-500">BBox: [{det.bbox.map(v => Math.round(v)).join(', ')}]</span>
@@ -263,22 +269,50 @@ export default function QCTab({
                         </div>
                       )}
                     </div>
-                    <span className="text-[9px] text-slate-500 italic mt-2">Engine: YOLO12n + OpenCV multi-pass texture analysis</span>
+                    <span className="text-[9px] text-slate-500 italic mt-2">Engine: Ultralytics YOLOv8 + OpenCV Multi-Pass Region Extraction</span>
                   </div>
                 </div>
 
+                {/* Cropped Region Patches Visual Gallery */}
+                {result.cropped_regions && result.cropped_regions.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-800">
+                    <span className="text-[10px] text-indigo-400 uppercase font-bold tracking-wider block">
+                      ✂️ Extracted Cropped Regions ({result.cropped_regions.length} Patches Passed to Vision LLM)
+                    </span>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 overflow-x-auto p-1 bg-slate-950/60 rounded-xl border border-slate-850">
+                      {result.cropped_regions.map((crop) => (
+                        <div key={crop.id} className="bg-slate-900/80 border border-slate-800 rounded-lg p-2 flex flex-col items-center space-y-1">
+                          {crop.crop_b64 ? (
+                            <img 
+                              src={crop.crop_b64} 
+                              alt={`Region #${crop.id}`} 
+                              className="h-16 w-full object-cover rounded border border-slate-700"
+                            />
+                          ) : (
+                            <div className="h-16 w-full bg-slate-800 rounded flex items-center justify-center text-[10px] text-slate-500">No Crop</div>
+                          )}
+                          <div className="w-full flex justify-between items-center text-[9px]">
+                            <span className="font-bold text-slate-300 truncate">#{crop.id} {crop.class}</span>
+                            <span className="font-mono text-indigo-400 font-bold">{(crop.confidence * 100).toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* AI Visual compliance text */}
                 <div className="flex-1 space-y-2 pt-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">AI Visual Compliance Audit</span>
-                  <pre className="bg-slate-950 border border-slate-850 rounded-xl p-4 text-[11px] leading-relaxed text-slate-350 whitespace-pre-wrap overflow-y-auto max-h-[150px] font-sans">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Multimodal Vision-LLM Diagnostic Synthesis</span>
+                  <pre className="bg-slate-950 border border-slate-850 rounded-xl p-4 text-[11px] leading-relaxed text-slate-350 whitespace-pre-wrap overflow-y-auto max-h-[160px] font-sans">
                     {result.vision_report}
                   </pre>
                 </div>
 
                 {/* Database state */}
                 <div className="pt-4 border-t border-slate-850 flex items-center justify-between text-[11px] text-slate-500">
-                  <span>Log committed: <span className="font-semibold text-slate-300">QCLog ID #{result.qc_log_id}</span></span>
-                  <span className="font-mono">SQL::qc_logs.verdict</span>
+                  <span>Audit Committed: <span className="font-semibold text-slate-300">QCLog ID #{result.qc_log_id}</span></span>
+                  <span className="font-mono text-indigo-400">YOLOv8 + OpenCV ➔ Vision-LLM Pipeline</span>
                 </div>
               </div>
             )}

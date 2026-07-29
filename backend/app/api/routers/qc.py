@@ -6,6 +6,7 @@ import torch
 from app.core.database import get_db
 from app.schemas.erp_schemas import QCLogOut
 import app.crud.erp_crud as crud
+from app.services.ai_service import AIService
 from ultralytics import YOLO
 import cv2
 import numpy as np
@@ -14,6 +15,7 @@ import logging
 
 router = APIRouter(prefix="/qc", tags=["quality_control"])
 logger = logging.getLogger("smartfactory.qc")
+ai_service = AIService()
 
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
@@ -283,17 +285,16 @@ async def analyze_quality_control(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Module 3: Quality Control — YOLO12 + OpenCV Fabric Defect Detection.
+    Multimodal Vision-LLM Assistant (CV + GenAI) — Intelligent Visual Document & Scene Inspector.
 
     Pipeline:
-      1. Decode uploaded fabric frame.
-      2. Run YOLO12 nano inference for generic object detection.
-      3. Run OpenCV multi-pass fabric texture analysis (dark/bright blobs,
-         edge-density tiles, local variance patches).
-      4. Merge, NMS-deduplicate, and classify all detections.
-      5. Draw bounding boxes via OpenCV.
-      6. Build compliance report from combined telemetry.
-      7. Commit QCLog to database; update PO status.
+      1. Decode uploaded scene frame / document / equipment inspection image.
+      2. Run YOLOv8 / OpenCV multi-pass spatial object & defect detector.
+      3. Extract cropped bounding box region patches (base64) for spatial anomaly regions.
+      4. Pass cropped patches alongside text prompts to Vision-Language Model (Qwen2-VL / LLaVA / Gemini architecture).
+      5. Annotate bounding boxes & spatial telemetry onto full composite frame.
+      6. Synthesize multimodal diagnostic summary with root-cause analysis & recommendations.
+      7. Commit QCLog to database and update PO / Asset status.
     """
     if yolo_model is None:
         raise HTTPException(status_code=500, detail="YOLO model not loaded.")
@@ -358,13 +359,36 @@ async def analyze_quality_control(
         f"After NMS: {len(combined)}"
     )
 
-    # ── 6. Annotate frame ─────────────────────────────────────────────────────
+    # ── 6. Annotate frame & extract cropped region thumbnails ──────────────────
+    cropped_regions: List[dict] = []
     try:
         annotated = img.copy()
-        for det in combined:
+        img_h, img_w = img.shape[:2]
+
+        for idx, det in enumerate(combined, 1):
             x1, y1, x2, y2 = (int(c) for c in det["bbox"])
             conf  = det["confidence"]
             label = det["class"]
+
+            # Ensure bounds stay within frame boundaries
+            crop_x1 = max(0, x1)
+            crop_y1 = max(0, y1)
+            crop_x2 = min(img_w, x2)
+            crop_y2 = min(img_h, y2)
+
+            crop_b64 = ""
+            if (crop_x2 > crop_x1) and (crop_y2 > crop_y1):
+                crop_patch = img[crop_y1:crop_y2, crop_x1:crop_x2]
+                _, crop_buf = cv2.imencode(".jpg", crop_patch, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                crop_b64 = f"data:image/jpeg;base64,{base64.b64encode(crop_buf).decode('utf-8')}"
+
+            cropped_regions.append({
+                "id":         idx,
+                "class":      label,
+                "confidence": conf,
+                "bbox":       [crop_x1, crop_y1, crop_x2, crop_y2],
+                "crop_b64":   crop_b64,
+            })
 
             if label == "defect_free":
                 colour = (0, 200, 0)       # Green → Defect Free
@@ -378,7 +402,7 @@ async def analyze_quality_control(
             cv2.rectangle(annotated, (x1, y1), (x2, y2), colour, 2)
             cv2.putText(
                 annotated,
-                f"{label} {conf:.0%}",
+                f"#{idx} {label} {conf:.0%}",
                 (x1, max(y1 - 8, 10)),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.45, colour, 1, cv2.LINE_AA,
             )
@@ -387,11 +411,23 @@ async def analyze_quality_control(
         img_b64 = base64.b64encode(buf).decode("utf-8")
 
     except Exception as e:
-        logger.error(f"Frame annotation error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Image annotation failure: {e}")
+        logger.error(f"Frame annotation & region cropping error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Image processing failure: {e}")
 
-    # ── 7. Build compliance report ────────────────────────────────────────────
-    report_text, verdict = _build_qc_report(combined, yolo_detections)
+    # ── 7. Multimodal Vision-LLM Analysis ─────────────────────────────────────
+    try:
+        vision_res = await ai_service.generate_multimodal_vision_report(
+            cropped_regions=cropped_regions,
+            order_id=order_id,
+            user_prompt="Inspect cropped bounding box regions and generate multimodal diagnostic analysis.",
+            full_image_b64=f"data:image/jpeg;base64,{img_b64}",
+        )
+        report_text = vision_res["report_text"]
+        verdict = vision_res["verdict"]
+    except Exception as vision_err:
+        logger.error(f"Multimodal vision generation failed ({vision_err}), fallback to standard report")
+        report_text, verdict = _build_qc_report(combined, yolo_detections)
+
     defect_type = (
         ", ".join(sorted({d["class"] for d in combined if d["class"] != "defect_free"}))
         if any(d["class"] != "defect_free" for d in combined)
@@ -425,6 +461,7 @@ async def analyze_quality_control(
         "status":          "success",
         "order_id":        order_id,
         "yolo_detections": combined,
+        "cropped_regions": cropped_regions,
         "vision_report":   report_text,
         "final_status":    verdict,
         "qc_log_id":       qc_log.log_id,

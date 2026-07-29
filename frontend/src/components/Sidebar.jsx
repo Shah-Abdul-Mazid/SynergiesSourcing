@@ -15,7 +15,7 @@ export default function Sidebar({
     { id: 'inventory', name: 'Inventory & Safety', icon: '🧵' },
     { id: 'production', name: 'Production Line', icon: '🏗' },
     { id: 'logistics', name: 'Logistics Tracking', icon: '🚢' },
-    { id: 'qc', name: 'Quality Control (YOLO)', icon: '🔍' },
+    { id: 'qc', name: 'Multimodal Vision Inspector', icon: '🔍' },
     { id: 'reports', name: 'Reports & SQL Agent', icon: '📈' },
     { id: 'assistant', name: 'AI Assistant', icon: '🤖' },
     { id: 'rag', name: 'Knowledge Base (RAG)', icon: '📚' },

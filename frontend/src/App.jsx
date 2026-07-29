@@ -14,7 +14,7 @@ import AIAssistantTab from './components/AIAssistantTab';
 import RAGTab from './components/RAGTab';
 
 // Configure Axios defaults to target our FastAPI backend
-const API_URL = 'http://localhost:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 axios.defaults.baseURL = API_URL;
 
 export default function App() {
@@ -147,7 +147,7 @@ export default function App() {
             <div className="h-4 w-[1px] bg-slate-800" />
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/50" />
-              <span className="text-slate-300 font-medium">Synergies Merchandiser</span>
+              <span className="text-slate-300 font-medium">Enterprise Manager</span>
             </div>
           </div>
         </header>

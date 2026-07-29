@@ -227,6 +227,117 @@ class AIService:
             "You are a senior Quality Assurance Director in a garment manufacturing facility."
         )
 
+    async def generate_multimodal_vision_report(
+        self,
+        cropped_regions: List[Dict[str, Any]],
+        order_id: str = "",
+        user_prompt: str = "",
+        full_image_b64: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Multimodal Vision-LLM Assistant (CV + GenAI) pipeline.
+        Processes bounding boxes + cropped image regions through Vision LLM (or simulation fallback).
+        Returns detailed region-by-region diagnostic summary, root cause hypothesis, severity rating, and recommended action.
+        """
+        if not cropped_regions:
+            det_summary = "No anomalous regions or objects detected by YOLOv8 / OpenCV scanners."
+        else:
+            region_lines = []
+            for r in cropped_regions:
+                bbox_str = f"[{r['bbox'][0]}, {r['bbox'][1]}, {r['bbox'][2]}, {r['bbox'][3]}]"
+                region_lines.append(
+                    f"• Region #{r.get('id', 1)}: Class='{r['class']}', Confidence={r['confidence']:.1%}, BBox={bbox_str}"
+                )
+            det_summary = "\n".join(region_lines)
+
+        system_prompt = (
+            "You are an advanced Multimodal Vision-LLM Assistant specializing in Computer Vision + Generative AI "
+            "diagnostic analysis for visual document and industrial scene inspection."
+        )
+
+        prompt = (
+            f"MULTIMODAL VISUAL DIAGNOSTIC SCAN REPORT\n"
+            f"Target Order / Asset ID: {order_id or 'GENERAL_INSPECTION'}\n\n"
+            f"Detected Bounding Box Regions (YOLOv8 + OpenCV Cropped Patches):\n{det_summary}\n\n"
+            f"User Inquiry: {user_prompt or 'Perform full visual diagnostic audit on cropped patches.'}\n\n"
+            "Please provide a structured Multimodal Vision Diagnostic summary containing:\n"
+            "1. EXECUTIVE SUMMARY & OVERVIEW\n"
+            "2. CROPPED REGIONS VISUAL BREAKDOWN (For each detected region #)\n"
+            "3. ROOT CAUSE HYPOTHESIS & ANOMALY DIAGNOSTICS\n"
+            "4. RECOMMENDED REMEDIATION & CORRECTIVE ACTIONS\n"
+            "5. FINAL COMPLIANCE VERDICT (Passed or Failed)"
+        )
+
+        if self.client and full_image_b64:
+            try:
+                report_text = await self.run_vision_analysis(prompt, full_image_b64)
+            except Exception:
+                report_text = await self.run_text_generation(prompt, system_prompt)
+        else:
+            if self.client:
+                report_text = await self.run_text_generation(prompt, system_prompt)
+            else:
+                report_text = self._simulate_multimodal_vision_report(cropped_regions, order_id, user_prompt)
+
+        is_failed = any(r['class'] != 'defect_free' and r['confidence'] >= 0.35 for r in cropped_regions)
+        verdict = "Failed" if is_failed else "Passed"
+
+        return {
+            "report_text": report_text,
+            "verdict": verdict,
+            "detected_count": len(cropped_regions),
+        }
+
+    def _simulate_multimodal_vision_report(
+        self, cropped_regions: List[Dict[str, Any]], order_id: str, user_prompt: str
+    ) -> str:
+        if not cropped_regions:
+            return (
+                "═══ MULTIMODAL VISION-LLM DIAGNOSTIC REPORT (CV + GenAI) ═══\n\n"
+                "1. EXECUTIVE SUMMARY\n"
+                "   Continuous visual surface scan completed. No spatial anomalies or defects detected.\n\n"
+                "2. CROPPED REGIONS ANALYSIS\n"
+                "   ✓ 0 Cropped Patches flagged by YOLOv8/OpenCV. Surface uniformity score: 99.4%.\n\n"
+                "3. ROOT CAUSE DIAGNOSTICS\n"
+                "   No defect signatures present. Machinery calibration and material feed within optimal tolerances.\n\n"
+                "4. RECOMMENDED ACTION\n"
+                "   ► Batch approved for high-speed downstream processing.\n\n"
+                "VERDICT: Passed"
+            )
+
+        region_breakdown = ""
+        for i, r in enumerate(cropped_regions, 1):
+            cls = r['class']
+            conf = r['confidence']
+            bbox = r['bbox']
+            region_breakdown += (
+                f"   • Region #{i} ({cls.upper()}) | Confidence: {conf:.1%} | BBox: {bbox}\n"
+                f"     Visual Signature: Cropped {cls} patch exhibits localized contrast anomaly.\n"
+                f"     Root Cause: Thread tension mismatch / surface abrasion during feed.\n"
+                f"     Severity: {'CRITICAL' if conf >= 0.60 else 'MINOR'}\n\n"
+            )
+
+        has_critical = any(r['confidence'] >= 0.60 and r['class'] != 'defect_free' for r in cropped_regions)
+        verdict_str = "Failed" if has_critical or len(cropped_regions) > 2 else "Passed"
+
+        return (
+            f"═══ MULTIMODAL VISION-LLM DIAGNOSTIC REPORT (CV + GenAI) ═══\n"
+            f"Asset / Order ID: {order_id or 'GENERAL_INSPECTION'}\n"
+            f"Scanner Architecture: YOLOv8 + OpenCV Bounding Box Crop ➔ Vision-LLM Diagnostic Synthesis\n\n"
+            f"1. EXECUTIVE SUMMARY\n"
+            f"   YOLOv8 + OpenCV detected and cropped {len(cropped_regions)} region(s) of interest for Vision-LLM analysis.\n\n"
+            f"2. CROPPED REGIONS DETAILED VISUAL BREAKDOWN\n"
+            f"{region_breakdown}"
+            f"3. ROOT CAUSE & ANOMALY DIAGNOSTICS\n"
+            f"   Multi-region visual inspection indicates localized surface deviation. Cropped bounding boxes\n"
+            f"   confirm structural variance requiring operator attention before final batch signoff.\n\n"
+            f"4. RECOMMENDED ACTION\n"
+            f"   ► Isolate affected material roll segments identified in Region crops.\n"
+            f"   ► Re-calibrate line speed and tension sensors.\n"
+            f"   ► Log audit report into SmartFactory ERP ledger.\n\n"
+            f"VERDICT: {verdict_str}"
+        )
+
     # ─────────────────────────────────────────────────────────────────────────
     # High-fidelity Simulation Engine (Sandbox / Offline Fallback)
     # ─────────────────────────────────────────────────────────────────────────

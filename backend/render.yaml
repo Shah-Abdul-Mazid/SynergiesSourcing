@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: smartfactory-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OLLAMA_API_KEY
+        value: dummy
+      - key: OLLAMA_API_URL
+        value: http://localhost:11434/v1
+      - key: OLLAMA_MODEL_NAME
+        value: openchat
