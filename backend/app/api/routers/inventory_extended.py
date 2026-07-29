@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
-from sqlalchemy.ext.asyncio import AsyncSession
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from typing import List, Dict, Any
 from app.core.database import get_db
 import app.crud.erp_crud as crud
@@ -11,7 +11,7 @@ ai_service = AIService()
 SAFETY_STOCK_LIMIT = 500.0
 
 @router.get("/dashboard")
-async def get_inventory_dashboard(db: AsyncSession = Depends(get_db)):
+async def get_inventory_dashboard(db: AsyncIOMotorDatabase = Depends(get_db)):
     """Enhanced dashboard metrics for warehouse stock."""
     try:
         inventory = await crud.get_all_inventory(db)
@@ -33,7 +33,6 @@ async def get_inventory_dashboard(db: AsyncSession = Depends(get_db)):
                 "percentage_of_limit": min((item.quantity / 10000.0) * 100.0, 100.0)
             })
 
-        # Calculate an inventory health score
         health_score = 100 - (low_stock_count * 15)
         health_score = max(0, min(100, health_score))
 
@@ -49,7 +48,7 @@ async def get_inventory_dashboard(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/forecast")
-async def get_inventory_forecast(db: AsyncSession = Depends(get_db)):
+async def get_inventory_forecast(db: AsyncIOMotorDatabase = Depends(get_db)):
     """AI-powered demand forecast and safety stock alert recommendations."""
     try:
         inventory = await crud.get_all_inventory(db)
@@ -63,7 +62,7 @@ async def get_inventory_forecast(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/chat")
-async def chat_inventory(message: str = Body(..., embed=True), db: AsyncSession = Depends(get_db)):
+async def chat_inventory(message: str = Body(..., embed=True), db: AsyncIOMotorDatabase = Depends(get_db)):
     """Warehouse AI Chat Assistant specializing in stock logs."""
     try:
         inventory = await crud.get_all_inventory(db)

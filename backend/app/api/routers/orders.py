@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from typing import List
 from app.core.database import get_db
 from app.schemas.erp_schemas import PurchaseOrderOut, PurchaseOrderCreate, PurchaseOrderStatusUpdate, InventoryOut
@@ -8,7 +8,7 @@ import app.crud.erp_crud as crud
 router = APIRouter(tags=["orders_and_inventory"])
 
 @router.get("/orders", response_model=List[PurchaseOrderOut])
-async def read_orders(db: AsyncSession = Depends(get_db)):
+async def read_orders(db: AsyncIOMotorDatabase = Depends(get_db)):
     """
     Get all purchase orders and their associated BOM lists.
     """
@@ -19,7 +19,7 @@ async def read_orders(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Database retrieval failure: {str(e)}")
 
 @router.post("/orders", response_model=PurchaseOrderOut)
-async def write_order(order_in: PurchaseOrderCreate, db: AsyncSession = Depends(get_db)):
+async def write_order(order_in: PurchaseOrderCreate, db: AsyncIOMotorDatabase = Depends(get_db)):
     """
     Manually create a new purchase order. Automatically instantiates the buyer record if new.
     """
@@ -37,20 +37,14 @@ async def write_order(order_in: PurchaseOrderCreate, db: AsyncSession = Depends(
         )
 
         po = await crud.create_purchase_order(db, order_in.dict())
-        await db.commit()
-        await db.refresh(po)
-        
-        # Reload to get relationships populated (e.g. empty list of bom_items)
-        po_loaded = await crud.get_purchase_order(db, po.order_id)
-        return po_loaded
+        return po
     except HTTPException:
         raise
     except Exception as e:
-        await db.rollback()
         raise HTTPException(status_code=500, detail=f"Order creation failure: {str(e)}")
 
 @router.get("/inventory", response_model=List[InventoryOut])
-async def read_inventory(db: AsyncSession = Depends(get_db)):
+async def read_inventory(db: AsyncIOMotorDatabase = Depends(get_db)):
     """
     Get all current material stock inventory counts.
     """
@@ -62,7 +56,7 @@ async def read_inventory(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/orders/{order_id}", response_model=PurchaseOrderOut)
-async def read_order(order_id: str, db: AsyncSession = Depends(get_db)):
+async def read_order(order_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
     """
     Get a single purchase order by its ID.
     """
@@ -76,7 +70,7 @@ async def read_order(order_id: str, db: AsyncSession = Depends(get_db)):
 async def update_order_status(
     order_id: str,
     payload: PurchaseOrderStatusUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     """
     Manually update the ERP state, risk level, and/or delay probability of a purchase order.
@@ -101,12 +95,8 @@ async def update_order_status(
         )
         if not po:
             raise HTTPException(status_code=404, detail=f"Purchase order '{order_id}' not found.")
-        await db.commit()
-        # Reload to get full relationships
-        po_loaded = await crud.get_purchase_order(db, order_id)
-        return po_loaded
+        return po
     except HTTPException:
         raise
     except Exception as e:
-        await db.rollback()
         raise HTTPException(status_code=500, detail=f"Status update failure: {str(e)}")

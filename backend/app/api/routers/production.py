@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Body, Path
-from sqlalchemy.ext.asyncio import AsyncSession
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from typing import List, Dict, Any
 from app.core.database import get_db
 from app.schemas.erp_schemas import ProductionOrderOut, ProductionOrderCreate
@@ -10,7 +10,7 @@ router = APIRouter(prefix="/production", tags=["production"])
 ai_service = AIService()
 
 @router.get("/orders", response_model=List[ProductionOrderOut])
-async def read_production_orders(db: AsyncSession = Depends(get_db)):
+async def read_production_orders(db: AsyncIOMotorDatabase = Depends(get_db)):
     """List all production tracking orders."""
     try:
         return await crud.get_all_production_orders(db)
@@ -18,22 +18,18 @@ async def read_production_orders(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/orders", response_model=ProductionOrderOut)
-async def create_production_tracking(payload: ProductionOrderCreate, db: AsyncSession = Depends(get_db)):
+async def create_production_tracking(payload: ProductionOrderCreate, db: AsyncIOMotorDatabase = Depends(get_db)):
     """Create a new production tracking line linked to a PO."""
     try:
-        # Check PO exists
         po = await crud.get_purchase_order(db, payload.order_id)
         if not po:
             raise HTTPException(status_code=404, detail="Linked Purchase Order not found")
         
         prod = await crud.create_production_order(db, payload.dict())
-        await db.commit()
-        await db.refresh(prod)
         return prod
     except HTTPException:
         raise
     except Exception as e:
-        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/orders/{production_id}/status", response_model=ProductionOrderOut)
@@ -42,7 +38,7 @@ async def update_prod_status(
     status: str = Body(...),
     progress_pct: float = Body(...),
     risk_score: float = Body(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     """Update progress, status, and AI risk of a production tracking line."""
     try:
@@ -55,17 +51,14 @@ async def update_prod_status(
         )
         if not prod:
             raise HTTPException(status_code=404, detail="Production tracking order not found")
-        await db.commit()
-        await db.refresh(prod)
         return prod
     except HTTPException:
         raise
     except Exception as e:
-        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/analytics")
-async def get_production_analytics(db: AsyncSession = Depends(get_db)):
+async def get_production_analytics(db: AsyncIOMotorDatabase = Depends(get_db)):
     """Predictive analytics and delay indicators for active lines."""
     try:
         prod_orders = await crud.get_all_production_orders(db)
@@ -83,7 +76,6 @@ async def get_production_analytics(db: AsyncSession = Depends(get_db)):
 
         avg_progress = (total_progress / active_count) if active_count > 0 else 0.0
         
-        # Call AI for operational optimization advice
         orders_list = [{"id": p.production_id, "po": p.order_id, "status": p.status, "progress": p.progress_pct, "risk": p.risk_score} for p in prod_orders]
         ai_recommendation = await ai_service.generate_production_recommendation(orders_list)
         
@@ -98,7 +90,7 @@ async def get_production_analytics(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/ai-recommendation")
-async def get_production_recommendation(db: AsyncSession = Depends(get_db)):
+async def get_production_recommendation(db: AsyncIOMotorDatabase = Depends(get_db)):
     """Fetch structured AI production suggestions."""
     try:
         prod_orders = await crud.get_all_production_orders(db)

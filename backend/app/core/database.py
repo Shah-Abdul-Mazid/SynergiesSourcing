@@ -1,26 +1,18 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import declarative_base
+from motor.motor_asyncio import AsyncIOMotorClient
 from app.core.config import settings
+from pymongo import ASCENDING
 
-# Create async engine for SQLite (using aiosqlite driver)
-engine = create_async_engine(settings.DATABASE_URL, echo=False)
+# Initialize Motor client
+client = AsyncIOMotorClient(settings.MONGODB_URI)
 
-# Configure session factory
-SessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False
-)
+def get_database():
+    return client[settings.MONGODB_DB_NAME]
 
-# Declarative base class for models
-Base = declarative_base()
-
-# FastAPI dependency to yield async session
+# FastAPI dependency to provide a database instance per request
 async def get_db():
-    async with SessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+    db = get_database()
+    try:
+        yield db
+    finally:
+        # Motor client does not require explicit close per request
+        pass

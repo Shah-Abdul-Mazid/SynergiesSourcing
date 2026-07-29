@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
-from sqlalchemy.ext.asyncio import AsyncSession
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from typing import List, Optional
 from app.core.database import get_db
 import app.crud.erp_crud as crud
@@ -11,7 +11,6 @@ from app.services.ai_service import AIService
 from datetime import datetime
 import io
 
-# Optional imports for RAG extraction
 try:
     import PyPDF2
 except Exception:
@@ -31,7 +30,6 @@ router = APIRouter(prefix="/assistant", tags=["ai_assistant"])
 ai_service = AIService()
 
 def _extract_text_from_file(filename: str, file_bytes: bytes) -> str:
-    """Extract raw text from uploaded PDF/DOCX/Excel/CSV in memory."""
     ext = filename.split(".")[-1].lower()
     text_content = ""
 
@@ -60,7 +58,6 @@ def _extract_text_from_file(filename: str, file_bytes: bytes) -> str:
             text_content = file_bytes.decode("utf-8", errors="ignore")
         
         else:
-            # Standard plain text fallback
             text_content = file_bytes.decode("utf-8", errors="ignore")
             
         return text_content.strip()
@@ -69,10 +66,9 @@ def _extract_text_from_file(filename: str, file_bytes: bytes) -> str:
 
 
 @router.post("/chat", response_model=AIAssistantResponse)
-async def chat_with_erp_assistant(payload: AIAssistantRequest, db: AsyncSession = Depends(get_db)):
+async def chat_with_erp_assistant(payload: AIAssistantRequest, db: AsyncIOMotorDatabase = Depends(get_db)):
     """Chat assistant with context injections from database based on selection."""
     try:
-        # Build context based on requested scope
         context = {}
         if payload.context_type in ["orders", "all"]:
             orders = await crud.get_all_purchase_orders(db)
@@ -102,10 +98,8 @@ async def chat_with_erp_assistant(payload: AIAssistantRequest, db: AsyncSession 
                 for q in qc_logs
             ]
 
-        # Call LLM helper
         response_text = await ai_service.chat_with_erp(payload.message, context)
         
-        # Build smart action suggestions
         actions = []
         lower_resp = response_text.lower()
         if "reorder" in lower_resp or "safety stock" in lower_resp:
@@ -126,7 +120,7 @@ async def chat_with_erp_assistant(payload: AIAssistantRequest, db: AsyncSession 
 @router.post("/rag/upload", response_model=RAGDocumentOut)
 async def upload_rag_document(
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     """Upload PDF/DOCX/Excel/CSV contract, invoice, or tech pack and index in local database RAG library."""
     try:
@@ -144,18 +138,15 @@ async def upload_rag_document(
         }
         
         doc = await crud.create_rag_document(db, doc_data)
-        await db.commit()
-        await db.refresh(doc)
         return doc
     except ValueError as val_err:
         raise HTTPException(status_code=400, detail=str(val_err))
     except Exception as e:
-        await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database write failure: {str(e)}")
 
 
 @router.get("/rag/documents", response_model=List[RAGDocumentOut])
-async def list_rag_documents(db: AsyncSession = Depends(get_db)):
+async def list_rag_documents(db: AsyncIOMotorDatabase = Depends(get_db)):
     """List all indexed RAG documents."""
     try:
         return await crud.get_all_rag_documents(db)
@@ -166,7 +157,7 @@ async def list_rag_documents(db: AsyncSession = Depends(get_db)):
 @router.post("/rag/query")
 async def query_rag_knowledge_base(
     question: str = Body(..., embed=True),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     """Answer user question using ONLY information from uploaded documents (RAG)."""
     try:
@@ -177,14 +168,12 @@ async def query_rag_knowledge_base(
                 "sources": []
             }
         
-        # Merge all contents
         combined_text = ""
         sources = []
         for d in docs:
             combined_text += f"\n=== START FILE: {d.filename} ===\n{d.content_text}\n=== END FILE ===\n"
             sources.append(d.filename)
             
-        # Keep context size sane (limit to first 10,000 characters)
         if len(combined_text) > 12000:
             combined_text = combined_text[:12000] + "... (content truncated for prompt size)"
             

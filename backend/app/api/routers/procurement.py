@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
-from sqlalchemy.ext.asyncio import AsyncSession
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from typing import List, Dict, Any
 from app.core.database import get_db
 from app.schemas.erp_schemas import SupplierOut, SupplierCreate
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/procurement", tags=["procurement"])
 ai_service = AIService()
 
 @router.get("/suppliers", response_model=List[SupplierOut])
-async def read_suppliers(db: AsyncSession = Depends(get_db)):
+async def read_suppliers(db: AsyncIOMotorDatabase = Depends(get_db)):
     """Get all suppliers."""
     try:
         return await crud.get_all_suppliers(db)
@@ -22,7 +22,7 @@ async def read_suppliers(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/suppliers", response_model=SupplierOut)
-async def create_supplier(supplier_in: SupplierCreate, db: AsyncSession = Depends(get_db)):
+async def create_supplier(supplier_in: SupplierCreate, db: AsyncIOMotorDatabase = Depends(get_db)):
     """Create a new supplier profile."""
     try:
         existing = await crud.get_supplier(db, supplier_in.supplier_id)
@@ -34,11 +34,10 @@ async def create_supplier(supplier_in: SupplierCreate, db: AsyncSession = Depend
             name=supplier_in.name,
             email=supplier_in.contact_email
         )
-        await db.commit()
-        await db.refresh(supplier)
         return supplier
+    except HTTPException:
+        raise
     except Exception as e:
-        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/rfq-generate")
@@ -58,13 +57,12 @@ async def generate_rfq(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/ai-recommendations")
-async def get_procurement_recommendations(db: AsyncSession = Depends(get_db)):
+async def get_procurement_recommendations(db: AsyncIOMotorDatabase = Depends(get_db)):
     """Get AI reorder and supplier recommendations based on active orders and inventory."""
     try:
         inventory = await crud.get_all_inventory(db)
         orders = await crud.get_all_purchase_orders(db)
         
-        # Simple heuristic combined with AI forecast
         inv_list = [{"item": i.item, "quantity": i.quantity, "unit": i.unit} for i in inventory]
         forecast_text = await ai_service.generate_inventory_forecast(inv_list)
         
@@ -77,7 +75,7 @@ async def get_procurement_recommendations(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/vendor-performance")
-async def get_vendor_performance(db: AsyncSession = Depends(get_db)):
+async def get_vendor_performance(db: AsyncIOMotorDatabase = Depends(get_db)):
     """Fetch all suppliers along with their performance metrics and AI risk evaluation."""
     try:
         suppliers = await crud.get_all_suppliers(db)
@@ -86,11 +84,9 @@ async def get_vendor_performance(db: AsyncSession = Depends(get_db)):
         
         perf_data = []
         for s in suppliers:
-            # Gather relevant logs
-            order_count = sum(1 for o in orders if o.buyer_id == s.supplier_id or s.supplier_id in o.order_id) # heuristic for links
+            order_count = sum(1 for o in orders if o.buyer_id == s.supplier_id or s.supplier_id in o.order_id)
             defects = [log for log in qc_logs if s.supplier_id in log.report or s.supplier_id in log.order_id]
             
-            # Request AI Risk Assessment
             history = [{"order_count": order_count, "defects_logged": len(defects)}]
             try:
                 ai_risk_raw = await ai_service.generate_supplier_risk_score(s.name, history)

@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy.ext.asyncio import AsyncSession
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from typing import List
 
-import torch
 from app.core.database import get_db
 from app.schemas.erp_schemas import QCLogOut
 import app.crud.erp_crud as crud
@@ -48,36 +47,21 @@ except Exception as e:
 CRITICAL_CONF = 0.60   # ≥ 60 % → Critical defect
 MINOR_CONF    = 0.30   # ≥ 30 % → Minor defect; < 30 % → Noise
 
-# ── Fabric defect CV thresholds ────────────────────────────────────────────────
-BLOB_MIN_AREA      = 80    # px²  — ignore microscopic dust
-BLOB_MAX_AREA      = 40000 # px²  — ignore full-image aberrations
-DARK_SPOT_THRESH   = 60    # pixel intensity (0-255) below which we call it a dark anomaly
-BRIGHT_SPOT_THRESH = 220   # pixel intensity above which we call it a bright anomaly
-LOCAL_STD_THRESH   = 18.0  # local texture standard-deviation difference — flags rough patches
-EDGE_DENSITY_MULT  = 2.2   # edge density must be this many × median to be a weave anomaly
+BLOB_MIN_AREA      = 80
+BLOB_MAX_AREA      = 40000
+DARK_SPOT_THRESH   = 60
+BRIGHT_SPOT_THRESH = 220
+LOCAL_STD_THRESH   = 18.0
+EDGE_DENSITY_MULT  = 2.2
 
 
 def _detect_fabric_defects_cv(img_bgr: np.ndarray) -> List[dict]:
-    """
-    Multi-pass OpenCV fabric defect detector.
-
-    Passes:
-      1. Dark-blob analysis  — spots, stains, holes (dark regions)
-      2. Bright-blob analysis — shine, fabric separation, bright stains
-      3. Edge-density mapping — snag / weave disruption / torn threads
-      4. Local texture variance — rough patches vs. uniform background
-
-    Returns a list of defect dicts identical in shape to YOLO detections:
-      {"class": str, "confidence": float, "bbox": [x1,y1,x2,y2]}
-    """
     detections: List[dict] = []
     h, w = img_bgr.shape[:2]
 
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    # Slight blur to reduce sensor noise without smearing defect edges
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    # ── Pass 1 : Dark blobs (stains, holes, insect marks) ──────────────────
     _, dark_mask = cv2.threshold(blurred, DARK_SPOT_THRESH, 255, cv2.THRESH_BINARY_INV)
     dark_mask = cv2.morphologyEx(dark_mask, cv2.MORPH_OPEN,
                                   cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
@@ -86,7 +70,6 @@ def _detect_fabric_defects_cv(img_bgr: np.ndarray) -> List[dict]:
         area = cv2.contourArea(cnt)
         if BLOB_MIN_AREA <= area <= BLOB_MAX_AREA:
             x, y, cw, ch = cv2.boundingRect(cnt)
-            # Relative area as a proxy confidence (larger = more confident)
             conf = min(0.45 + (area / BLOB_MAX_AREA) * 0.50, 0.95)
             detections.append({
                 "class":      "dark_spot_stain",
@@ -94,7 +77,6 @@ def _detect_fabric_defects_cv(img_bgr: np.ndarray) -> List[dict]:
                 "bbox":       [float(x), float(y), float(x + cw), float(y + ch)],
             })
 
-    # ── Pass 2 : Bright blobs (fabric tears, over-tension, chemical spots) ─
     _, bright_mask = cv2.threshold(blurred, BRIGHT_SPOT_THRESH, 255, cv2.THRESH_BINARY)
     bright_mask = cv2.morphologyEx(bright_mask, cv2.MORPH_OPEN,
                                     cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
@@ -110,9 +92,7 @@ def _detect_fabric_defects_cv(img_bgr: np.ndarray) -> List[dict]:
                 "bbox":       [float(x), float(y), float(x + cw), float(y + ch)],
             })
 
-    # ── Pass 3 : Edge-density anomaly (snags, thread pulls, weave breaks) ──
     edges = cv2.Canny(blurred, 40, 120)
-    # Divide image into 8×8 tiles and measure edge density per tile
     tile_h, tile_w = max(h // 8, 1), max(w // 8, 1)
     densities = []
     for r in range(8):
@@ -134,8 +114,6 @@ def _detect_fabric_defects_cv(img_bgr: np.ndarray) -> List[dict]:
                     "bbox":       [float(x1), float(y1), float(x2), float(y2)],
                 })
 
-    # ── Pass 4 : Local texture variance (rough/pilling/raised fibre patches) ─
-    # Use a sliding window std-dev map — large local variance signals surface irregularity
     kernel_size = max(w // 12, 16)
     if kernel_size % 2 == 0:
         kernel_size += 1
@@ -159,15 +137,12 @@ def _detect_fabric_defects_cv(img_bgr: np.ndarray) -> List[dict]:
                 "bbox":       [float(x), float(y), float(x + cw), float(y + ch)],
             })
 
-    # ── Deduplicate overlapping boxes (simple IoU-based NMS) ──────────────
     detections = _nms(detections, iou_threshold=0.45)
-
     logger.info(f"OpenCV fabric detector found {len(detections)} defect region(s).")
     return detections
 
 
 def _iou(a: list, b: list) -> float:
-    """Intersection-over-Union for two [x1,y1,x2,y2] boxes."""
     ix1 = max(a[0], b[0]); iy1 = max(a[1], b[1])
     ix2 = min(a[2], b[2]); iy2 = min(a[3], b[3])
     inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
@@ -179,7 +154,6 @@ def _iou(a: list, b: list) -> float:
 
 
 def _nms(detections: List[dict], iou_threshold: float = 0.45) -> List[dict]:
-    """Greedy NMS — keeps highest-confidence box when two overlap strongly."""
     if not detections:
         return detections
     detections = sorted(detections, key=lambda d: d["confidence"], reverse=True)
@@ -195,15 +169,7 @@ def _nms(detections: List[dict], iou_threshold: float = 0.45) -> List[dict]:
     return kept
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Compliance Report Builder
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _build_qc_report(detections: List[dict], yolo_raw: List[dict]) -> tuple[str, str]:
-    """
-    YOLO12 + OpenCV compliance engine.
-    Returns (report_text, verdict).
-    """
     actual_defects = [d for d in detections if d["class"] != "defect_free"]
 
     if not actual_defects:
@@ -286,32 +252,15 @@ def _build_qc_report(detections: List[dict], yolo_raw: List[dict]) -> tuple[str,
     return report, verdict
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  POST /qc/analyze
-# ─────────────────────────────────────────────────────────────────────────────
-
 @router.post("/analyze")
 async def analyze_quality_control(
     order_id: str = Form(...),
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    """
-    Multimodal Vision-LLM Assistant (CV + GenAI) — Intelligent Visual Document & Scene Inspector.
-
-    Pipeline:
-      1. Decode uploaded scene frame / document / equipment inspection image.
-      2. Run YOLOv8 / OpenCV multi-pass spatial object & defect detector.
-      3. Extract cropped bounding box region patches (base64) for spatial anomaly regions.
-      4. Pass cropped patches alongside text prompts to Vision-Language Model (Qwen2-VL / LLaVA / Gemini architecture).
-      5. Annotate bounding boxes & spatial telemetry onto full composite frame.
-      6. Synthesize multimodal diagnostic summary with root-cause analysis & recommendations.
-      7. Commit QCLog to database and update PO / Asset status.
-    """
     if yolo_model is None:
         logger.info("YOLO model not active; running OpenCV multi-pass texture scan & Vision-LLM engine.")
 
-    # ── 1. Verify PO exists ───────────────────────────────────────────────────
     po = await crud.get_purchase_order(db, order_id)
     if not po:
         raise HTTPException(
@@ -319,7 +268,6 @@ async def analyze_quality_control(
             detail=f"Purchase order '{order_id}' not found."
         )
 
-    # ── 2. Decode image ───────────────────────────────────────────────────────
     try:
         image_bytes = await file.read()
         nparr = np.frombuffer(image_bytes, np.uint8)
@@ -330,7 +278,6 @@ async def analyze_quality_control(
         logger.error(f"Image decode error: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid image payload: {e}")
 
-    # ── 3. YOLO inference (general objects — supplementary) ───────────────────
     yolo_detections: List[dict] = []
     if yolo_model is not None:
         try:
@@ -346,33 +293,19 @@ async def analyze_quality_control(
                     "confidence": conf,
                     "bbox":       [round(c, 2) for c in coords],
                 })
-            logger.info(
-                f"YOLO scan: {len(yolo_detections)} generic object(s) on frame for order {order_id}"
-            )
         except Exception as e:
             logger.error(f"YOLO inference error: {e}", exc_info=True)
-            # Non-fatal — CV engine will still run below
 
-    # ── 4. OpenCV fabric texture analysis (primary defect detector) ───────────
     try:
         cv_detections = _detect_fabric_defects_cv(img)
     except Exception as e:
         logger.error(f"OpenCV defect analysis error: {e}", exc_info=True)
         cv_detections = []
 
-    # ── 5. Merge detections: CV results are the authoritative fabric signal ────
-    # YOLO generic detections are included only if confidence ≥ MINOR_CONF
     filtered_yolo = [d for d in yolo_detections if d["confidence"] >= MINOR_CONF]
     combined = cv_detections + filtered_yolo
     combined = _nms(combined, iou_threshold=0.45)
 
-    logger.info(
-        f"Combined defect scan — CV: {len(cv_detections)}, "
-        f"YOLO filtered: {len(filtered_yolo)}, "
-        f"After NMS: {len(combined)}"
-    )
-
-    # ── 6. Annotate frame & extract cropped region thumbnails ──────────────────
     cropped_regions: List[dict] = []
     try:
         annotated = img.copy()
@@ -383,7 +316,6 @@ async def analyze_quality_control(
             conf  = det["confidence"]
             label = det["class"]
 
-            # Ensure bounds stay within frame boundaries
             crop_x1 = max(0, x1)
             crop_y1 = max(0, y1)
             crop_x2 = min(img_w, x2)
@@ -404,13 +336,13 @@ async def analyze_quality_control(
             })
 
             if label == "defect_free":
-                colour = (0, 200, 0)       # Green → Defect Free
+                colour = (0, 200, 0)
             elif conf >= CRITICAL_CONF:
-                colour = (0, 0, 220)       # Red   → Critical
+                colour = (0, 0, 220)
             elif conf >= MINOR_CONF:
-                colour = (0, 165, 255)     # Amber → Minor
+                colour = (0, 165, 255)
             else:
-                colour = (120, 120, 120)   # Grey  → Noise
+                colour = (120, 120, 120)
 
             cv2.rectangle(annotated, (x1, y1), (x2, y2), colour, 2)
             cv2.putText(
@@ -427,7 +359,6 @@ async def analyze_quality_control(
         logger.error(f"Frame annotation & region cropping error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Image processing failure: {e}")
 
-    # ── 7. Multimodal Vision-LLM Analysis ─────────────────────────────────────
     try:
         vision_res = await ai_service.generate_multimodal_vision_report(
             cropped_regions=cropped_regions,
@@ -447,7 +378,6 @@ async def analyze_quality_control(
         else "None"
     )
 
-    # ── 8. Commit QCLog + update PO status ───────────────────────────────────
     try:
         qc_log = await crud.create_qc_log(
             db=db,
@@ -456,15 +386,13 @@ async def analyze_quality_control(
             status=verdict,
             report=report_text,
         )
-        po.status = "QC Passed" if verdict == "Passed" else "QC Failed"
-        await db.commit()
-        await db.refresh(qc_log)
+        po_status = "QC Passed" if verdict == "Passed" else "QC Failed"
+        await crud.update_po_status(db, order_id=order_id, status=po_status)
         logger.info(
             f"QC log committed — Order: {order_id}, Log ID: {qc_log.log_id}, "
             f"Verdict: {verdict}"
         )
     except Exception as db_err:
-        await db.rollback()
         logger.error(f"QC log DB write failed: {db_err}")
         raise HTTPException(
             status_code=500, detail="Database write failure for QC audit log."
@@ -482,12 +410,8 @@ async def analyze_quality_control(
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  GET /qc/logs
-# ─────────────────────────────────────────────────────────────────────────────
-
 @router.get("/logs", response_model=List[QCLogOut])
-async def read_qc_logs(db: AsyncSession = Depends(get_db)):
+async def read_qc_logs(db: AsyncIOMotorDatabase = Depends(get_db)):
     """Return all QC audit log records from the database."""
     try:
         return await crud.get_all_qc_logs(db)

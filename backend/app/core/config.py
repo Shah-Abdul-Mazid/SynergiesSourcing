@@ -2,8 +2,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # ── Database ───────────────────────────────────────────────────────────────
-    DATABASE_URL: str = "sqlite+aiosqlite:///./apparel_erp.db"
+    # ── MongoDB ─────────────────────────────────────────────────────────────────
+    MONGODB_URI: str = "mongodb://localhost:27017"
+    MONGODB_DB_NAME: str = "smartfactory"
 
     # ── Ollama / OpenAI-compatible LLM endpoint ────────────────────────────────
     OLLAMA_API_KEY: str = "ollama"
@@ -16,5 +17,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-

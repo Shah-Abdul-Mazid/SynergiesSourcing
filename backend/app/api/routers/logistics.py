@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.core.database import get_db
 from app.schemas.erp_schemas import LogisticsDisruptionRequest, LogisticsDisruptionResponse
 from app.services.ai_service import AIService
@@ -12,7 +12,7 @@ ai_service = AIService()
 logger = logging.getLogger("smartfactory.logistics")
 
 @router.post("/analyze", response_model=LogisticsDisruptionResponse)
-async def analyze_logistics_disruption(payload: LogisticsDisruptionRequest, db: AsyncSession = Depends(get_db)):
+async def analyze_logistics_disruption(payload: LogisticsDisruptionRequest, db: AsyncIOMotorDatabase = Depends(get_db)):
     """
     Module 2: Supply Chain Risk Analytics
     Evaluates line disruption vectors, runs AI-driven supply risk modeling,
@@ -82,20 +82,21 @@ async def analyze_logistics_disruption(payload: LogisticsDisruptionRequest, db: 
 
     # 4. Commit updated risk values into database
     try:
-        po.risk_level = risk_level
-        po.delay_probability = delay_probability
-        
-        # If risk is High, update order status to indicate check required
+        status_to_set = po.status
         if risk_level == "High":
-            po.status = "Risk Warning"
+            status_to_set = "Risk Warning"
         elif po.status == "Risk Warning":
-            po.status = "Processing"
+            status_to_set = "Processing"
             
-        await db.commit()
-        await db.refresh(po)
+        po = await crud.update_po_status(
+            db,
+            order_id=po.order_id,
+            status=status_to_set,
+            risk_level=risk_level,
+            delay_probability=delay_probability
+        )
         logger.info(f"Order {po.order_id} updated: Risk={risk_level}, Delay={delay_probability:.2f}")
     except Exception as db_err:
-        await db.rollback()
         logger.error(f"Failed to update PO risk status: {db_err}")
         raise HTTPException(status_code=500, detail="Database write failure during risk commit.")
 
