@@ -335,23 +335,23 @@ async def analyze_quality_control(
     if yolo_model is not None:
         try:
             results = yolo_model(img, verbose=False, conf=0.20)
-        result  = results[0]
-        for box in result.boxes:
-            cls_id = int(box.cls[0].item())
-            label  = result.names[cls_id]
-            conf   = float(box.conf[0].item())
-            coords = box.xyxy[0].tolist()
-            yolo_detections.append({
-                "class":      label,
-                "confidence": conf,
-                "bbox":       [round(c, 2) for c in coords],
-            })
-        logger.info(
-            f"YOLO12 scan: {len(yolo_detections)} generic object(s) on frame for order {order_id}"
-        )
-    except Exception as e:
-        logger.error(f"YOLO12 inference error: {e}", exc_info=True)
-        # Non-fatal — CV engine will still run below
+            result  = results[0]
+            for box in result.boxes:
+                cls_id = int(box.cls[0].item())
+                label  = result.names[cls_id]
+                conf   = float(box.conf[0].item())
+                coords = box.xyxy[0].tolist()
+                yolo_detections.append({
+                    "class":      label,
+                    "confidence": conf,
+                    "bbox":       [round(c, 2) for c in coords],
+                })
+            logger.info(
+                f"YOLO scan: {len(yolo_detections)} generic object(s) on frame for order {order_id}"
+            )
+        except Exception as e:
+            logger.error(f"YOLO inference error: {e}", exc_info=True)
+            # Non-fatal — CV engine will still run below
 
     # ── 4. OpenCV fabric texture analysis (primary defect detector) ───────────
     try:
