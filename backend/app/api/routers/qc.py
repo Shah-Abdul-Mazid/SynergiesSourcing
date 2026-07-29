@@ -19,19 +19,31 @@ ai_service = AIService()
 
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
-best_model = str(BASE_DIR / "Data" / "runs" / "fabric_yolo" / "weights" / "best.pt")
+yolo_model = None
 
 try:
-    yolo_model = YOLO(best_model)
-    logger.info("YOLO12 best model weights loaded successfully.")
+    local_weights_1 = BASE_DIR / "Data" / "runs" / "fabric_yolo" / "weights" / "best.pt"
+    local_weights_2 = BASE_DIR / "yolov8n.pt"
+    local_weights_3 = BASE_DIR / "yolo12n.pt"
+
+    if local_weights_1.exists():
+        yolo_model = YOLO(str(local_weights_1))
+        logger.info(f"Loaded custom YOLO model from {local_weights_1}")
+    elif local_weights_2.exists():
+        yolo_model = YOLO(str(local_weights_2))
+        logger.info(f"Loaded YOLO model from {local_weights_2}")
+    elif local_weights_3.exists():
+        yolo_model = YOLO(str(local_weights_3))
+        logger.info(f"Loaded YOLO model from {local_weights_3}")
+    else:
+        yolo_model = YOLO("yolov8n.pt")
+        logger.info("YOLOv8n standard weights loaded.")
 except Exception as e:
-    logger.warning(f"YOLO12 model load failed ({e}), trying yolov12n.pt fallback.")
-    try:
-        yolo_model = YOLO("yolov12n.pt")
-        logger.info("YOLOv12n fallback weights loaded.")
-    except Exception as e2:
-        logger.error(f"All YOLO model loads failed: {e2}", exc_info=True)
-        yolo_model = None
+    logger.warning(
+        f"YOLO model load warning ({e}). "
+        "Engine will use multi-pass OpenCV texture detection & Vision-LLM as primary visual inspector."
+    )
+    yolo_model = None
 
 CRITICAL_CONF = 0.60   # ≥ 60 % → Critical defect
 MINOR_CONF    = 0.30   # ≥ 30 % → Minor defect; < 30 % → Noise
@@ -297,7 +309,7 @@ async def analyze_quality_control(
       7. Commit QCLog to database and update PO / Asset status.
     """
     if yolo_model is None:
-        raise HTTPException(status_code=500, detail="YOLO model not loaded.")
+        logger.info("YOLO model not active; running OpenCV multi-pass texture scan & Vision-LLM engine.")
 
     # ── 1. Verify PO exists ───────────────────────────────────────────────────
     po = await crud.get_purchase_order(db, order_id)
@@ -318,10 +330,11 @@ async def analyze_quality_control(
         logger.error(f"Image decode error: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid image payload: {e}")
 
-    # ── 3. YOLO12 inference (general objects — supplementary) ─────────────────
+    # ── 3. YOLO inference (general objects — supplementary) ───────────────────
     yolo_detections: List[dict] = []
-    try:
-        results = yolo_model(img, verbose=False, conf=0.20)
+    if yolo_model is not None:
+        try:
+            results = yolo_model(img, verbose=False, conf=0.20)
         result  = results[0]
         for box in result.boxes:
             cls_id = int(box.cls[0].item())

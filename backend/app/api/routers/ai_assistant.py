@@ -12,9 +12,20 @@ from datetime import datetime
 import io
 
 # Optional imports for RAG extraction
-import PyPDF2
-import docx
-import openpyxl
+try:
+    import PyPDF2
+except Exception:
+    PyPDF2 = None
+
+try:
+    import docx
+except Exception:
+    docx = None
+
+try:
+    import openpyxl
+except Exception:
+    openpyxl = None
 
 router = APIRouter(prefix="/assistant", tags=["ai_assistant"])
 ai_service = AIService()
@@ -25,17 +36,17 @@ def _extract_text_from_file(filename: str, file_bytes: bytes) -> str:
     text_content = ""
 
     try:
-        if ext == "pdf":
+        if ext == "pdf" and PyPDF2 is not None:
             reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
             for page in reader.pages:
                 text_content += (page.extract_text() or "") + "\n"
         
-        elif ext == "docx":
+        elif ext == "docx" and docx is not None:
             doc = docx.Document(io.BytesIO(file_bytes))
             for para in doc.paragraphs:
                 text_content += para.text + "\n"
         
-        elif ext in ["xlsx", "xls"]:
+        elif ext in ["xlsx", "xls"] and openpyxl is not None:
             wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
             for sheet in wb.sheetnames:
                 text_content += f"--- Sheet: {sheet} ---\n"
